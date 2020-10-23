@@ -81,7 +81,7 @@ def read_fasta(amplicon_file, minseqlen):
     """
     la fonction prend:
     - amplicon_file: un fichier fasta.gz (str)
-    - minseqlen longueur minimale des séquences (int)
+    - minseqlen: longueur minimale des séquences (int)
     retourne un générateur de sequences de longueur
     l >= minseqlen : yield sequence
     """
@@ -98,7 +98,8 @@ def dereplication_fulllength(amplicon_file, minseqlen, mincount):
     https://docs.python.org/fr/3/library/collections.html
     la fonction prend:
     - amplicon_file: un fichier fasta.gz (str)
-    - minseqlen longueur minimale des séquences (int)
+    - minseqlen: longueur minimale des séquences (int)
+    - mincount: Comptage minimum des séquences (int)
     retourne un générateur de sequences de longueur
     """
     sequence = read_fasta(amplicon_file, minseqlen)
