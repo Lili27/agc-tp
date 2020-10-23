@@ -17,19 +17,20 @@ import argparse
 import sys
 import os
 import gzip
-import statistics
+#import statistics
 from collections import Counter
 # https://github.com/briney/nwalign3
 # ftp://ftp.ncbi.nih.gov/blast/matrices/
-import nwalign3 as nw
+#import nwalign3 as nw
+from Bio import SeqIO
 
-__author__ = "Your Name"
+__author__ = "Hollier Laëtitia"
 __copyright__ = "Universite Paris Diderot"
-__credits__ = ["Your Name"]
+__credits__ = ["Hollier Laëtitia"]
 __license__ = "GPL"
 __version__ = "1.0.0"
-__maintainer__ = "Your Name"
-__email__ = "your@email.fr"
+__maintainer__ = "Hollier Laëtitia"
+__email__ = "laetitia-hollier@outlook.fr"
 __status__ = "Developpement"
 
 
@@ -69,9 +70,49 @@ def get_arguments():
                         default="OTU.fasta", help="Output file")
     return parser.parse_args()
 
-#==============================================================
+
+
+##########################################################
+######### 1. Dé-duplication en séquence “complète ########
+##########################################################
+
+
+def read_fasta(amplicon_file, minseqlen):
+    """
+    la fonction prend:
+    - amplicon_file: un fichier fasta.gz (str)
+    - minseqlen longueur minimale des séquences (int)
+    retourne un générateur de sequences de longueur
+    l >= minseqlen : yield sequence
+    """
+    with gzip.open(amplicon_file, "rt") as filin:
+        for record in SeqIO.parse(filin, "fasta"):
+            sequence = str(record.seq)
+            if len(sequence) >= minseqlen:
+                yield sequence
+
+
+def dereplication_fulllength(amplicon_file, minseqlen, mincount):
+    """
+    https://docs.python.org/2/library/collections.html
+    https://docs.python.org/fr/3/library/collections.html
+    la fonction prend:
+    - amplicon_file: un fichier fasta.gz (str)
+    - minseqlen longueur minimale des séquences (int)
+    retourne un générateur de sequences de longueur
+    """
+    sequence = read_fasta(amplicon_file, minseqlen)
+    for seq in Counter(sequence).most_common():
+        if seq[1] >= mincount:
+            yield seq
+
+
+
+
+
+#=========================================================
 # Main program
-#==============================================================
+#=========================================================
 def main():
     """
     Main program function
@@ -79,6 +120,12 @@ def main():
     # Get arguments
     args = get_arguments()
 
+    #lecture du fichier fasta
+    amplicon_file = sys.argv[2]
+    minseqlen = int(sys.argv[4])
+    mincount = int(sys.argv[6])
+    dico_sequence = dereplication_fulllength(amplicon_file,minseqlen, mincount)
+    print(dico_sequence)
 
 if __name__ == '__main__':
     main()
