@@ -56,7 +56,7 @@ def get_arguments():
     parser = argparse.ArgumentParser(description=__doc__, usage=
                                      "{0} -h"
                                      .format(sys.argv[0]))
-    parser.add_argument('-i', '-amplicon_file', dest='amplicon_file', type=isfile, required=True, 
+    parser.add_argument('-i', '-amplicon_file', dest='amplicon_file', type=isfile, required=True,
                         help="Amplicon is a compressed fasta file (.fasta.gz)")
     parser.add_argument('-s', '-minseqlen', dest='minseqlen', type=int, default = 400,
                         help="Minimum sequence length for dereplication")
@@ -73,13 +73,12 @@ def get_arguments():
 
 
 ##########################################################
-######### 1. Dé-duplication en séquence “complète ########
+######## 1. Dé-duplication en séquence “complète" ########
 ##########################################################
 
 
 def read_fasta(amplicon_file, minseqlen):
-    """
-    la fonction prend:
+    """la fonction read_fasta prend:
     - amplicon_file: un fichier fasta.gz (str)
     - minseqlen: longueur minimale des séquences (int)
     retourne un générateur de sequences de longueur
@@ -93,14 +92,14 @@ def read_fasta(amplicon_file, minseqlen):
 
 
 def dereplication_fulllength(amplicon_file, minseqlen, mincount):
-    """
-    https://docs.python.org/2/library/collections.html
+    """ https://docs.python.org/2/library/collections.html
     https://docs.python.org/fr/3/library/collections.html
-    la fonction prend:
+    la fonction dereplication_fulllength prend:
     - amplicon_file: un fichier fasta.gz (str)
     - minseqlen: longueur minimale des séquences (int)
     - mincount: Comptage minimum des séquences (int)
-    retourne un générateur de sequences de longueur
+    retourne des séquences (avec O>=mincount) par ordre
+    décroissant d'occurence (O)
     """
     sequence = read_fasta(amplicon_file, minseqlen)
     for seq in Counter(sequence).most_common():
@@ -108,12 +107,119 @@ def dereplication_fulllength(amplicon_file, minseqlen, mincount):
             yield seq
 
 
+################################################################
+##2. Recherche de séquences chimériques par approche “de novo”##
+################################################################
 
+
+def get_chunks(sequence, chunk_size):
+    """La fonction get_chunks prend:
+    - sequence: une sequence sous forme d'une chaine de caractères (str)
+    - chunk_size: la longueur l de segment (int)
+    renvoit une liste de sous-séquence de taille l non chevauchant
+    NB: 4 segments doivent être obtenus par séquence !
+    """
+    liste_segments = []
+    i = 0
+    while i  < (len(sequence)-chunk_size+1):
+        segm = sequence[i:i+chunk_size]
+        liste_segments.append(segm)
+        i += chunk_size
+
+    return liste_segments
+
+
+def cut_kmer(sequence, kmer_size):
+    """La fonction cut_mer prend:
+    - sequence : une sequence sous forme d'une chaine de caractères (str)
+    - kmer_size : la taille du k-mer (int)
+    renvoit les k-mers uniques présents dans la séquence
+    """
+    for i in range(len(sequence)-kmer_size+1):
+        yield sequence[i:i+kmer_size]
+
+
+def get_unique_kmer(kmer_dict, sequence, id_seq, kmer_size):
+    """La fonction prend get_unique_kmer:
+    - kmer_dict: ayant pour clé un index de kmer et pour valeur
+    une liste d’identifiant des séquences dont ils proviennent
+    - sequence: 1sequence sous forme d'une chaine de caractères (str)
+    - id_seq: identifiant de la séquence (int)
+    - kmer_size: la taille du k-mer (int)
+    https://moonbooks.org/Articles/Cl%C3%A9-dun-dictionnaire-avec-plusieurs-valeurs-associ%C3%A9es-sous-python/
+    """
+    kmers = cut_kmer(sequence, kmer_size)
+    for kmer in kmers:
+        if kmer not in kmer_dict:
+            kmer_dict[kmer] = id_seq
+        else:
+            kmer_dict[kmer].append(id_seq)
+    return kmer_dict
+
+
+
+def search_mates(kmer_dict, sequence, kmer_size):
+    """La fonction search_mates prend:
+    - kmer_dict: un dictionnaire avec pour un clé un index et
+    pour valeur une liste d'identifiant des séquences
+    - sequence: une sequence sous forme d'une chaine de caractères (str)
+    - kmer_size: la taille du kmer (int)
+    """
+    return [i[0] for i in Counter([ids for kmer
+        in cut_kmer(sequence, kmer_size) if kmer in kmer_dict
+        for ids in kmer_dict[kmer]]).most_common(8)]
+
+
+def get_identity(alignment_list):
+    """La fonction get_identity prend:
+    - alignment_list: liste de 2 séquences (liste de sous
+    forme d'une chaine de caractères (str))
+    => calcule le pourcentage d'identité entre deux séquences
+    selon id = nb nucleotides identiques / longueur de l'alignement
+    """
+    seq1 = alignment_list[0]
+    seq2 = alignment_list[1]
+    count = 0
+    for base1 in seq1:
+        for base2 in seq2:
+            if base1 == base2:
+                count += 1
+
+    identity = count / len(seq1)
+    return identity
+
+
+##########################################################
+################ 3. Regroupement glouton #################
+##########################################################
+
+
+def fill(text, width=80):
+    """
+    Split text with a line return to respect fasta format
+    """
+    return os.linesep.join(text[i:i+width] for i in range(0, len(text), width))
+
+
+
+def write_OTU(OTU_list, output_file):
+    """ La fonction write_OTU prend:
+    une liste d'OTU
+    et un chemin vers un fichier de sortie
+    affiche les OTU au format fasta
+    """
+    with open(output_file, "w") as filout:
+        for i,seq in enumerate(OTU_list):
+            filout.write(">OTU_{} occurence:{}\n".format(i+1,seq[1]))
+            filout.write(fill(seq[0]))
+            filout.write("\n")
+        return filout
 
 
 #=========================================================
 # Main program
 #=========================================================
+
 def main():
     """
     Main program function
@@ -121,12 +227,14 @@ def main():
     # Get arguments
     args = get_arguments()
 
+
     #lecture du fichier fasta
     amplicon_file = sys.argv[2]
     minseqlen = int(sys.argv[4])
     mincount = int(sys.argv[6])
-    dico_sequence = dereplication_fulllength(amplicon_file,minseqlen, mincount)
-    print(dico_sequence)
+    lecture = dereplication_fulllength(amplicon_file, minseqlen,mincount)
+    print(lecture)
+
 
 if __name__ == '__main__':
     main()
