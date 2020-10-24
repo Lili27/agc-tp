@@ -172,7 +172,7 @@ def search_mates(kmer_dict, sequence, kmer_size):
 
 def get_identity(alignment_list):
     """La fonction get_identity prend:
-    - alignment_list: liste de 2 séquences (liste de sous
+    - alignment_list: liste de 2 séquences (sous
     forme d'une chaine de caractères (str))
     => calcule le pourcentage d'identité entre deux séquences
     selon id = nb nucleotides identiques / longueur de l'alignement
